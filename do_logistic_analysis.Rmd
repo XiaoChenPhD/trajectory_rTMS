@@ -1,7 +1,7 @@
 ---
 title: "Logistic_Analysis"
 author: "Xiao Chen"
-date: "2023-03-27"
+date: "2023-07-19"
 output: html_document
 ---
 
@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## import data
+## Importing data
 
 ```{r}
 rm(list = ls())
@@ -23,9 +23,11 @@ df$Group_Weights <- ifelse(df$X_traj_Group == 1, df$X_traj_ProbG1,
                                         )))
 ```
 
-## add a variable named "Anxiety" and "biological sex"
+## Adding a variable named "Anxiety" and "biological sex"
 
-0: no reported comorbidities 1: with anxiety (may include other comorbidities) 2: only other comorbidities
+Anxiety, 0: no reported comorbidities 1: with anxiety (may include other comorbidities)
+
+Biological sex, 0: biological male, 1: biological female
 
 ```{r}
 library(tidyverse)
@@ -51,8 +53,6 @@ df <- df %>%
     )
   )
 df$BiologicalSex <- as.factor(df$BiologicalSex)
-
-
 ```
 
 ## Dealing with the medication info table
@@ -226,7 +226,7 @@ df <- cbind(df,
             meds_selected$Lithium_use)
 ```
 
-## Make Table 1
+## Making demographical table
 
 ```{r}
 # install.packages("gtsummary")
@@ -290,7 +290,7 @@ group_summary <- table1 %>%
 group_summary
 ```
 
-## do multinomial logistic regression
+## Doing multinomial logistic regression
 
 ```{r}
 library(nnet)
@@ -312,6 +312,7 @@ df <- df %>%
   mutate(W2delta = Y - W2PHQ9,
          W2relative_delta = (Y - W2PHQ9)/Y)
 
+# defining a function to get p values
 pValue_extract <- function(x){
   z <- summary(x)$coefficients/summary(x)$standard.errors
   # 2-tailed Wald z tests to test significance of coefficients
@@ -325,6 +326,7 @@ df$BiologicalSexandGenderifDi <- as.factor(df$BiologicalSexandGenderifDi)
 df$Race <- as.factor(df$Race)
 df$ofMedsDuringTx <- as.factor(df$ofMedsDuringTx)
 
+# the initial model
 model <- multinom(X_traj_Group ~ AgeMTDay + BaselinePHQ9 + BiologicalSex  + Anxiety, data = df, weights = df$Group_Weights)
 
 OR_std <- exp(coef(model))*summary(model)$standard.errors
@@ -335,6 +337,7 @@ exp(coef(model))
 CI_lower
 CI_upper
 
+# model including medication info
 model <- multinom(X_traj_Group ~ AgeMTDay + BaselinePHQ9 + BiologicalSex  + Anxiety + df$`meds_selected$anticonvulsant_use`, data = df, weights = df$Group_Weights)
 
 OR_std <- exp(coef(model))*summary(model)$standard.errors
@@ -346,7 +349,7 @@ CI_lower
 CI_upper
 ```
 
-## calculate the c-statistics and Hosmer-Lemeshow test results
+## Calculating the c-statistics and Hosmer-Lemeshow test results
 
 ```{r}
 # install and library all packages

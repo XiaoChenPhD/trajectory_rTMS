@@ -1,18 +1,16 @@
 ---
-title: "main_analysis"
+title: "Primary analyses"
 output:
   html_document: default
   pdf_document: default
-date: "2023-03-13"
+date: "2023-07-19"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Main analyses of the trajectory project Based on the four-group model
-
-group 1,2,4 cubic, group 3 quadratic. Comparing the group info of week 7 and week 10 models 2. do stats on the number of missing values of each
+## Main analyses of the trajectory project that is based on the four-group model
 
 ```{r}
 # import data
@@ -29,9 +27,9 @@ trajectory_data_clean <- cbind(trajectory_data_clean, wk10_group)
 trajectory_data_clean <- cbind(trajectory_data_clean, wk7_group)
 ```
 
-## do secondary analysis
+## Secondary analysis
 
-comparing the PHQ-9 scores, remission rates (PHQ-9 \< 5), response rate (reduction rates of PHQ-9 score ≥ 50%) at week 1, week7, and week 10 for all four groups
+Comparing the PHQ-9 scores, remission rates (PHQ-9 \< 5), response rate (reduction rates of PHQ-9 score ≥ 50%) at week 1, week7, and week 10 for all four groups
 
 ```{r}
 library(tidyverse)
@@ -40,7 +38,7 @@ library(dplyr)
 library(compute.es)
 library(effsize)
 
-# select data
+# select data, only included subjects with data at 
 data_insted <- trajectory_data_clean %>%
                 select(c(
                         "Y","W1PHQ9", "W2PHQ9", "W3PHQ9", "W4PHQ9", "W5PHQ9",
@@ -48,19 +46,9 @@ data_insted <- trajectory_data_clean %>%
                         "wk10_model_group"
                         )
                        ) %>%
-                filter(!is.na(W1PHQ9) & !is.na(W8PHQ9) & !is.na(W10PHQ9))
+                filter(!is.na(W7PHQ9) & !is.na(W10PHQ9))
 
 # calculate the response rate and the remission rate
-W1 <- data_insted %>% 
-      group_by(wk10_model_group) %>%
-      summarize(N = n(),
-                remission_n = sum(W1PHQ9 < 5),
-                response_n = sum((Y - W1PHQ9) / Y >= 0.5),
-                mean_value = mean(W1PHQ9),
-                sd_value = sd(W1PHQ9),
-                response_rate = sum(W1PHQ9 < 5) / n(),
-                remission_rate = sum((Y - W1PHQ9) / Y >= 0.5) / n())
-
 W7 <- data_insted %>% 
       group_by(wk10_model_group) %>%
       summarize(N = n(),
@@ -111,27 +99,6 @@ response_table_McNemar <- data_insted %>%
                 c = sum((Y - W7PHQ9) / Y < 0.5 & (Y - W10PHQ9) / Y >= 0.5),
                 d = sum((Y - W7PHQ9) / Y < 0.5 & (Y - W10PHQ9) / Y < 0.5)
                   )
-# # group 1
-# data <- matrix(as.numeric(c(response_table_McNemar[1,2],
-#                             response_table_McNemar[1,3],
-#                             response_table_McNemar[1,4], 
-#                             response_table_McNemar[1,5])),
-#                             nrow = 2, ncol = 2, byrow = TRUE)
-# stats_chi_resp_group1 <- mcnemar.test(data)
-# print(stats_chi_resp_group1)
-# 
-# data <- matrix(as.numeric(c(remission_table_McNemar[1,2], 
-#                             remission_table_McNemar[1,3],
-#                             remission_table_McNemar[1,4], 
-#                             remission_table_McNemar[1,5])),
-#                             nrow = 2, ncol = 2, byrow = TRUE)
-# stats_chi_rem_group1 <- mcnemar.test(data)
-# print(stats_chi_rem_group1)
-# 
-# results[3,3] <- stats_chi_resp_group1$statistic
-# results[3,4] <- stats_chi_resp_group1$p.value
-# results[4,3] <- stats_chi_rem_group1$statistic
-# results[4,4] <- stats_chi_rem_group1$p.value
 
 # group 2
 data <- matrix(as.numeric(c(response_table_McNemar[1,2], 
@@ -177,19 +144,6 @@ results[7,4] <- stats_chi_resp_group3$p.value
 results[8,3] <- stats_chi_rem_group3$statistic
 results[8,4] <- stats_chi_rem_group3$p.value
 
-# # do paired t-tests, group 1
-# data_insted_group <- data_insted %>% 
-#                     select(c("W7PHQ9","W10PHQ9")) %>% 
-#                     filter(data_insted$wk10_model_group == 1)
-#             
-# before <- na.omit(data_insted_group$W7PHQ9)
-# after <- na.omit(data_insted_group$W10PHQ9)
-# stats_t <- t.test(before, after, paired = TRUE)
-# results[1, 3] <- stats_t$statistic
-# results[1, 4] <- stats_t$p.value
-# cohens_d <- cohen.d(before, after, paired = TRUE)
-# results[1, 5] <- cohens_d$estimate
-
 # do paired t-tests, group 2
 data_insted_group <- data_insted %>% 
                     select(c("W7PHQ9","W10PHQ9")) %>% 
@@ -232,7 +186,7 @@ observed
 kappa2(cbind(trajectory_data_clean$wk10_model_groupF, trajectory_data_clean$wk7_model_groupF))
 ```
 
-## count the missing values of each weeks' PHQ scores
+## Counting the missing values of each weeks' PHQ scores
 
 ```{r}
 # install.packages("tidyverse")
@@ -330,9 +284,9 @@ missing_counts_wk7z_long$Group <- factor(
 
 ```
 
-## plot some supplementary figures
+## Plotting some supplementary figures
 
-the bar plots and the line plot showing the ratios of missing values in each group
+The bar plots and the line plot showing the ratios of missing values in each group
 
 ```{r}
 # plot with ggplot2
