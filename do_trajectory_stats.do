@@ -8,13 +8,12 @@ clear all
 set more off
 
 * clean data
-cd /Users/ChenXiao/Documents/My_Documents/Trajectory_Project
+cd working_directory
 * the last excel data 
-import excel Salience_S51TTR_ITT+Opt_BilateralDLPFC_Addl.xlsx, sheet(1ProtocolStanBil=AllTx#) firstrow
+import excel Salience_data.xlsx, sheet(1) firstrow
 
 *drop duplicate subjects and patients that are "opted for additional treatments"
 drop if substr(EnrolledinStudy,1,5) == "Opted"
-
 
 * drop patients marked as red, who were with a PHQ-9 score > 5 and < 10
 drop if RID == "RID-16081"
@@ -94,7 +93,7 @@ traj, model(cnorm) var(BaselinePHQ9 W1PHQ9 W2PHQ9 W3PHQ9 W4PHQ9 W5PHQ9 W6PHQ9 W7
 * five trajectories 
 traj, model(cnorm) var(BaselinePHQ9 W1PHQ9 W2PHQ9 W3PHQ9 W4PHQ9 W5PHQ9 W6PHQ9 W7PHQ9) indep(wk0 wk1 wk2 wk3 wk4 wk5 wk6 wk7) order (2 2 2 2 2) min(0) max(27)
 
-* step 02: looping across all possible order conbinations in the 4 group model
+* step 02: looping across all possible order permutations (up to cubic) in the 4 group model
 scalar BIC = -7663 //the best BIC
 local count 0
 forvalues order1 = 1/3 {
@@ -132,7 +131,6 @@ trajplot, xtitle(Week) ytitle(PHQ-9) ci
 
 
 * week 10 model
-
 
 * Step 01: try 1-5 groups, all quadratic models
 * one trajectory
