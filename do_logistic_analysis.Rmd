@@ -1,0 +1,396 @@
+---
+title: "Logistic_Analysis"
+author: "Xiao Chen"
+date: "2023-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## import data
+
+```{r}
+rm(list = ls())
+df <- read.csv("Trajectory_Data_Clean_withGroupInfo.csv")
+
+# select the right group weight number according to the grouping number
+df$Group_Weights <- ifelse(df$X_traj_Group == 1, df$X_traj_ProbG1,
+                          ifelse(df$X_traj_Group == 2, df$X_traj_ProbG2,
+                                 ifelse(df$X_traj_Group == 3, df$X_traj_ProbG3,
+                                        ifelse(df$X_traj_Group == 4, df$X_traj_ProbG4, NA)
+                                        )))
+```
+
+## add a variable named "Anxiety" and "biological sex"
+
+0: no reported comorbidities 1: with anxiety (may include other comorbidities) 2: only other comorbidities
+
+```{r}
+library(tidyverse)
+library(dplyr)
+
+df <- df %>%
+  mutate(
+    Anxiety = case_when(
+      grepl("Anxiety", df$ComorbiditiesNotDepression)~1,
+      TRUE~0
+    )
+  )
+df$Anxiety <- as.factor(df$Anxiety)
+
+# the observation who identify herself as non-binary (=5) is biologically female (=1)
+df <- df %>%
+  mutate(
+    BiologicalSex = case_when(
+      BiologicalSexandGenderifDi == 1~1,
+      BiologicalSexandGenderifDi == 2~2,
+      BiologicalSexandGenderifDi == 4~2,
+      BiologicalSexandGenderifDi == 5~1,
+    )
+  )
+df$BiologicalSex <- as.factor(df$BiologicalSex)
+
+
+```
+
+## Dealing with the medication info table
+
+```{r}
+# install.packages("readxl")
+library(readxl)
+library(dplyr)
+
+meds <- read_excel("Salience_S51TTR_TxMeds.xlsx", sheet = "MedsDuringTMS")
+names(meds)[1] <- "RID"
+meds_selected <- meds %>%
+  inner_join(df, by = "RID")
+
+# SSRI
+meds_selected <- meds_selected %>%
+  rowwise() %>%
+  mutate(SSRI_use = if_else(any(!is.na(c_across(c(
+    `Fluoxetine / Prozac®`,
+     Trintellix, 
+    `Citalopram / Celexa®`,
+    `Fluvoxamine / Luvox®`,
+    `Paroxetine / Paxil®`,
+    `Sertraline / Zoloft®`,
+    `Escitalopram / Lexapro®`,
+    `Viibryd / Vilazodone`
+    )))), 
+    TRUE, FALSE))
+
+# SNRI
+meds_selected$Pristiq <- as.numeric(meds_selected$Pristiq)
+meds_selected <- meds_selected %>%
+  rowwise() %>%
+  mutate(SNRI_use = if_else(any(!is.na(c_across(c(
+    `Venlafaxine / Effexor`,
+    `Duloxetine / Cymbalta®`, 
+     Pristiq,
+    `Fetzima / Levomilnacipran`
+    )))), 
+    TRUE, FALSE))
+
+# SSRI or SNRI
+meds_selected <- meds_selected %>%
+  mutate(SSRI_SNRI_use = SSRI_use | SNRI_use)
+
+# TCA
+meds_selected <- meds_selected %>%
+  rowwise() %>%
+  mutate(TCA_use = if_else(any(!is.na(c_across(c(
+    `Amitriptyline / Elavil / Endep`,
+    `Imipramine / Tofranil®`, 
+    `Desipramine/Norpramin/Pertofrane`,
+    `Trimipramine/Surmontil`,
+    `Clomipramine / Anafranil®`,
+    `Maprotilene/Ludiomil`,
+    `Doxepin / Sinequan®`,
+    `Nortriptyline / Pamelor / Aventyl`,
+    `Protriptyline/Vivactil`
+    )))), 
+    TRUE, FALSE))
+
+# MAOI
+meds_selected <- meds_selected %>%
+  rowwise() %>%
+  mutate(MAOI_use = if_else(any(!is.na(c_across(c(
+    `Phenelzine / Nardil®`,
+    `Selegiline / Eldepryl®`, 
+    `Selegiline Transdermal Patch/Emsam`,
+    `Tranylcypromine / Parnate®`,
+    `Isocarboxazid / Marplan®`,
+    )))), 
+    TRUE, FALSE))
+
+# other ADs
+meds_selected <- meds_selected %>%
+  rowwise() %>%
+  mutate(OtherAD_use = if_else(any(!is.na(c_across(c(
+    `Bupropion / Wellbutrin®`,
+    `Mirtazapine / Remeron®`, 
+    `Nefazodone / Serzone®`,
+    `Trazodone / Desyrel®`,
+    `Amoxapine / Asendin®`,
+    )))), 
+    TRUE, FALSE))
+
+# all kinds of antidepressant
+meds_selected <- meds_selected %>%
+  mutate(AD_use = SSRI_use | SNRI_use | TCA_use | MAOI_use | OtherAD_use)
+
+# benzos
+meds_selected$`Xanax (Alprazolam)` <- as.numeric(meds_selected$`Xanax (Alprazolam)`)
+meds_selected <- meds_selected %>%
+  rowwise() %>%
+  mutate(benzo_use = if_else(any(!is.na(c_across(c(
+    `Xanax (Alprazolam)`,
+    `Klonopin (Clonazepam)`,
+    `Valium (Diazepam)`,
+    `Ativan (Lorazepam)`,
+    `Oxazepam/Serax`,
+    `Librium (Chlordiazepoxide)`,
+    `Dalmane (Flurazepam)`,
+    `Restoril (Temazepam)`,
+    Prazepam,
+    `Tranxene (Clorazepate)`
+    )))), 
+    TRUE, FALSE))
+
+# Anticonvulsant
+tegretol <- c(rep(NA, nrow(meds_selected)))
+tegretol[meds_selected$C_AdditionalMedName == "Tegretol (Carbamazepine)"] <- 20
+meds_selected <- cbind(meds_selected, tegretol)
+meds_selected <- meds_selected %>%
+  rowwise() %>%
+  mutate(anticonvulsant_use = if_else(any(!is.na(c_across(c(
+    `Depakote (Divalproex, Valproate)`,
+    `Lyrica (Pregabalin)`,
+    `Neurontin (Gabapentin)`,
+    `Keppra (Levetiracetam)`,
+    `Trileptal (Oxcarbazepine)`,
+    `Luminal (Phenobarbitol)`,
+    Secobarbital,
+    tegretol,
+    `Lamictal (Lamotrigine)`
+    )))), 
+    TRUE, FALSE))
+
+# Augmenting
+zyprexa <- c(rep(NA, nrow(meds_selected)))
+zyprexa[meds_selected$A_AdditionalMedName == "Zyprexa (Olanzapine)"] <- 20
+meds_selected <- cbind(meds_selected, zyprexa)
+
+rexulti <- c(rep(NA, nrow(meds_selected)))
+rexulti[meds_selected$A_AdditionalMedName == "Rexulti (Brexpiprazole)"] <- 20
+meds_selected <- cbind(meds_selected, rexulti)
+
+risperdal <- c(rep(NA, nrow(meds_selected)))
+risperdal[meds_selected$A_AdditionalMedName == "Risperdal (Risperidone)"] <- 20
+meds_selected <- cbind(meds_selected, risperdal)
+
+meds_selected <- meds_selected %>%
+  rowwise() %>%
+  mutate(Augmenting_use = if_else(any(!is.na(c_across(c(
+    `Abilify (Aripiprazole)`,
+    `Lithium / Eskalith® / Lithobid®`,
+    `Latuda (Lurasidone)`,
+    `Seroquel (Quetipine)`,
+    `Geodon (Ziprasidone)`,
+     zyprexa, rexulti, risperdal
+    )))), 
+    TRUE, FALSE))
+
+meds_selected <- meds_selected %>%
+  rowwise() %>%
+  mutate(Lithium_use = if_else(any(!is.na(c_across(c(
+    `Lithium / Eskalith® / Lithobid®`
+    )))), 
+    TRUE, FALSE))
+
+# conbine medication info into main results df
+df <- cbind(df, 
+            meds_selected$SSRI_use, 
+            meds_selected$SNRI_use, 
+            meds_selected$TCA_use,
+            meds_selected$MAOI_use,
+            meds_selected$OtherAD_use, 
+            meds_selected$benzo_use, 
+            meds_selected$anticonvulsant_use, 
+            meds_selected$Augmenting_use, 
+            meds_selected$SSRI_SNRI_use, 
+            meds_selected$AD_use,
+            meds_selected$Lithium_use)
+```
+
+## Make Table 1
+
+```{r}
+# install.packages("gtsummary")
+library(gtsummary)
+# install.packages("officer")
+library(officer)
+
+table1 <- df %>%
+  select(c(
+    "AgeMTDay",
+    "BiologicalSex",
+    "BaselinePHQ9",
+    "Anxiety",
+    "X_traj_Group",
+    "meds_selected$SSRI_SNRI_use",
+    "meds_selected$TCA_use",
+    "meds_selected$OtherAD_use",
+    "meds_selected$benzo_use",
+    "meds_selected$Augmenting_use",
+    "meds_selected$anticonvulsant_use",
+    "meds_selected$Lithium_use"
+    )) 
+
+table1$BiologicalSex <- factor(
+                      table1$BiologicalSex,
+                      levels = c(1:2),
+                      labels = c("Female", "Male")
+                        )
+table1$X_traj_Group <- factor(
+                      table1$X_traj_Group,
+                      levels = c(1:4),
+                      labels = c("Rapid response, standard treatment length", "Rapid response, extended plateau", "Linear response, extended course", "Nonresponse")
+                        )
+table1$BaselinePHQ9 <- as.integer(table1$BaselinePHQ9)
+table1$Anxiety <- factor(
+                    table1$Anxiety,
+                    levels = c(0,1),
+                    labels = c("No anxiety comorbidity", "Any anxiety comorbidity")
+)
+
+names(table1)[1] <- "Age (years)"
+names(table1)[2] <- "Sex"
+names(table1)[3] <- "Baseline depressive symptoms"
+names(table1)[4] <- "Anxiety comorbidity"
+names(table1)[6:12] <- c("SSRI/SNRI use",
+                         "TCA use",
+                         "Other antidepressant use",
+                         "Benzodiazepine use",
+                         "Augmenting agent use",
+                         "Anticonvulsant use",
+                         "Lithium use"
+                         )
+
+group_summary <- table1 %>% 
+  tbl_summary(by = "X_traj_Group",
+            statistic = list(all_continuous() ~ "{mean} ({sd})"),
+            digits = list(all_continuous() ~ c(1, 1), all_categorical() ~ c(0, 1))
+            ) %>% 
+  add_overall(col_label = "**Total sample**, N = {N}")
+
+group_summary
+```
+
+## do multinomial logistic regression
+
+```{r}
+library(nnet)
+library(tidyr)
+library(dplyr)
+
+df <- df %>% 
+  mutate(across(c(`meds_selected$AD_use`,
+                  `meds_selected$benzo_use`,
+                  `meds_selected$Augmenting_use`,
+                  `meds_selected$anticonvulsant_use`,
+                  `meds_selected$SSRI_SNRI_use`,
+                  `meds_selected$SSRI_use`,
+                  `meds_selected$SNRI_use`,
+                  `meds_selected$OtherAD_use`
+                  ), 
+                ~ifelse(.x, 1, 0)
+                )) %>% 
+  mutate(W2delta = Y - W2PHQ9,
+         W2relative_delta = (Y - W2PHQ9)/Y)
+
+pValue_extract <- function(x){
+  z <- summary(x)$coefficients/summary(x)$standard.errors
+  # 2-tailed Wald z tests to test significance of coefficients
+  p <- (1 - pnorm(abs(z), 0, 1)) * 2
+  p
+}
+
+df$X_traj_Group <- as.factor(df$X_traj_Group)
+df$X_traj_Group <- relevel(df$X_traj_Group, ref = 2)
+df$BiologicalSexandGenderifDi <- as.factor(df$BiologicalSexandGenderifDi)
+df$Race <- as.factor(df$Race)
+df$ofMedsDuringTx <- as.factor(df$ofMedsDuringTx)
+
+model <- multinom(X_traj_Group ~ AgeMTDay + BaselinePHQ9 + BiologicalSex  + Anxiety, data = df, weights = df$Group_Weights)
+
+OR_std <- exp(coef(model))*summary(model)$standard.errors
+CI_upper <- exp(coef(model)) + 1.96*OR_std
+CI_lower <- exp(coef(model)) - 1.96*OR_std
+pValue_extract(model)
+exp(coef(model))
+CI_lower
+CI_upper
+
+model <- multinom(X_traj_Group ~ AgeMTDay + BaselinePHQ9 + BiologicalSex  + Anxiety + df$`meds_selected$anticonvulsant_use`, data = df, weights = df$Group_Weights)
+
+OR_std <- exp(coef(model))*summary(model)$standard.errors
+CI_upper <- exp(coef(model)) + 1.96*OR_std
+CI_lower <- exp(coef(model)) - 1.96*OR_std
+pValue_extract(model)
+exp(coef(model))
+CI_lower
+CI_upper
+```
+
+## calculate the c-statistics and Hosmer-Lemeshow test results
+
+```{r}
+# install and library all packages
+# install.packages("pROC")
+# install.packages("ResourceSelection")
+# Load the package
+library(pROC)
+library(ResourceSelection)
+library(tidyr)
+library(dplyr)
+
+results <- data.frame(matrix(nrow = 6, ncol = 3))
+names(results)[2] <- "c-statisitcs"
+names(results)[3] <- "H-L test's p"
+temp <- 0
+for (i in 1:3){
+  temp2 <- i+1
+  for (j in temp2:4){
+    temp <- temp + 1
+    table_2group <- df %>%
+      filter(X_traj_Group == i | X_traj_Group == j) %>%
+      mutate(X_traj_Group = case_when(
+              X_traj_Group == i~0,
+              X_traj_Group == j~1,
+        )
+      )
+    
+model <- glm(X_traj_Group ~ AgeMTDay + BaselinePHQ9 + BiologicalSex + Anxiety, data = table_2group, family = "binomial")
+    
+# Calculate predicted probabilities
+predicted_probabilities <- predict(model, type = "response")
+    
+# Calculate the c-statistic
+roc_obj <- roc(table_2group$X_traj_Group, predicted_probabilities)
+    c_statistic <- auc(roc_obj)
+    
+    # Calculate observed probabilities
+    observed_probabilities <- table_2group$X_traj_Group
+    hosmer_lemeshow_test <- hoslem.test(observed_probabilities, predicted_probabilities)
+    
+    # save out results 
+    results[temp,1] <- paste(as.character(i), as.character(j), sep = "-")
+    results[temp,2] <- c_statistic
+    results[temp,3] <- hosmer_lemeshow_test$p.value
+  }
+}
+```

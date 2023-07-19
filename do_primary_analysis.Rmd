@@ -1,0 +1,483 @@
+---
+title: "main_analysis"
+output:
+  html_document: default
+  pdf_document: default
+date: "2023-03-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Main analyses of the trajectory project Based on the four-group model
+
+group 1,2,4 cubic, group 3 quadratic. Comparing the group info of week 7 and week 10 models 2. do stats on the number of missing values of each
+
+```{r}
+# import data
+rm(list = ls())
+
+trajectory_data_clean <- read.csv("Trajectory_Data_Clean.csv")
+wk10_group <- read.csv("wk10_model_group.csv")
+names(wk10_group) <- c("wk10_model_group")
+wk7_group <- read.csv("wk7_model_group.csv")
+names(wk7_group) <- c("wk7_model_group")
+
+# append group variables to data.csv
+trajectory_data_clean <- cbind(trajectory_data_clean, wk10_group)
+trajectory_data_clean <- cbind(trajectory_data_clean, wk7_group)
+```
+
+## do secondary analysis
+
+comparing the PHQ-9 scores, remission rates (PHQ-9 \< 5), response rate (reduction rates of PHQ-9 score ≥ 50%) at week 1, week7, and week 10 for all four groups
+
+```{r}
+library(tidyverse)
+library(dplyr)
+# install.packages("compute.es")  # Run this line if you haven't installed the package
+library(compute.es)
+library(effsize)
+
+# select data
+data_insted <- trajectory_data_clean %>%
+                select(c(
+                        "Y","W1PHQ9", "W2PHQ9", "W3PHQ9", "W4PHQ9", "W5PHQ9",
+                        "W6PHQ9", "W7PHQ9", "W8PHQ9", "W9PHQ9", "W10PHQ9",
+                        "wk10_model_group"
+                        )
+                       ) %>%
+                filter(!is.na(W1PHQ9) & !is.na(W8PHQ9) & !is.na(W10PHQ9))
+
+# calculate the response rate and the remission rate
+W1 <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(N = n(),
+                remission_n = sum(W1PHQ9 < 5),
+                response_n = sum((Y - W1PHQ9) / Y >= 0.5),
+                mean_value = mean(W1PHQ9),
+                sd_value = sd(W1PHQ9),
+                response_rate = sum(W1PHQ9 < 5) / n(),
+                remission_rate = sum((Y - W1PHQ9) / Y >= 0.5) / n())
+
+W7 <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(N = n(),
+                remission_n  = sum(W7PHQ9 < 5),
+                response_n = sum((Y - W7PHQ9) / Y >= 0.5),
+                mean_value = mean(W7PHQ9),
+                sd_value = sd(W7PHQ9),
+                response_rate = sum((Y - W7PHQ9) / Y >= 0.5) / n(),
+                remission_rate = sum(W7PHQ9 < 5) / n())
+W10<- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(N = n(),
+                remission_n = sum(W10PHQ9 < 5),
+                response_n = sum((Y - W10PHQ9) / Y >= 0.5),
+                mean_value = mean(W10PHQ9),
+                sd_value = sd(W10PHQ9),
+                response_rate = sum((Y - W10PHQ9) / Y >= 0.5) / n(),
+                remission_rate = sum(W10PHQ9 < 5) / n())
+
+# buid a table "results" to store results
+results_wk7 <- rbind(t(W7[1,5:8]), t(W7[2,5:8]), t(W7[3,5:8]))
+results_wk10 <- rbind(t(W10[1,5:8]), t(W10[2,5:8]), t(W10[3,5:8]))
+results <- cbind(results_wk7,results_wk10)
+results <- cbind(results, c(rep(0, 12)), c(rep(0, 12)), c(rep(0, 12)))
+colnames(results)[1:5] <- c('week 7', 'week 10', 't/chi2', 'p', 'cohend')
+
+# # chi-square test to compare group differences, might be problematic!!
+# response_table <- cbind(W10$response_n[1:2], W10$N[1:2] - W10$response_n[1:2])
+# result <- chisq.test(response_table)
+# 
+# remission_table <- cbind(W10$remission_n[1:2], W10$N[1:2] - W10$remission_n[1:2])
+# result <- chisq.test(remission_table)
+# print(result)
+# 
+
+# McNemar test
+remission_table_McNemar <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(a  = sum(W7PHQ9 < 5 & W10PHQ9 < 5),
+                b = sum(W7PHQ9 < 5 & W10PHQ9 >= 5),
+                c = sum(W7PHQ9 >= 5 & W10PHQ9 < 5),
+                d = sum(W7PHQ9 >= 5 & W10PHQ9 >= 5)
+                  )
+response_table_McNemar <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(a  = sum((Y - W7PHQ9) / Y >= 0.5 & (Y - W10PHQ9) / Y >= 0.5),
+                b = sum((Y - W7PHQ9) / Y >= 0.5 & (Y - W10PHQ9) / Y < 0.5),
+                c = sum((Y - W7PHQ9) / Y < 0.5 & (Y - W10PHQ9) / Y >= 0.5),
+                d = sum((Y - W7PHQ9) / Y < 0.5 & (Y - W10PHQ9) / Y < 0.5)
+                  )
+# # group 1
+# data <- matrix(as.numeric(c(response_table_McNemar[1,2],
+#                             response_table_McNemar[1,3],
+#                             response_table_McNemar[1,4], 
+#                             response_table_McNemar[1,5])),
+#                             nrow = 2, ncol = 2, byrow = TRUE)
+# stats_chi_resp_group1 <- mcnemar.test(data)
+# print(stats_chi_resp_group1)
+# 
+# data <- matrix(as.numeric(c(remission_table_McNemar[1,2], 
+#                             remission_table_McNemar[1,3],
+#                             remission_table_McNemar[1,4], 
+#                             remission_table_McNemar[1,5])),
+#                             nrow = 2, ncol = 2, byrow = TRUE)
+# stats_chi_rem_group1 <- mcnemar.test(data)
+# print(stats_chi_rem_group1)
+# 
+# results[3,3] <- stats_chi_resp_group1$statistic
+# results[3,4] <- stats_chi_resp_group1$p.value
+# results[4,3] <- stats_chi_rem_group1$statistic
+# results[4,4] <- stats_chi_rem_group1$p.value
+
+# group 2
+data <- matrix(as.numeric(c(response_table_McNemar[1,2], 
+                            response_table_McNemar[1,3],
+                            response_table_McNemar[1,4],
+                            response_table_McNemar[1,5])),
+                            nrow = 2, ncol = 2, byrow = TRUE)
+stats_chi_resp_group2 <- mcnemar.test(data)
+print(stats_chi_resp_group2)
+
+data <- matrix(as.numeric(c(remission_table_McNemar[1,2],
+                            remission_table_McNemar[1,3],
+                            remission_table_McNemar[1,4],
+                            remission_table_McNemar[1,5])),
+                            nrow = 2, ncol = 2, byrow = TRUE)
+stats_chi_rem_group2 <- mcnemar.test(data)
+print(stats_chi_rem_group2)
+
+results[3,3] <- stats_chi_resp_group2$statistic
+results[3,4] <- stats_chi_resp_group2$p.value
+results[4,3] <- stats_chi_rem_group2$statistic
+results[4,4] <- stats_chi_rem_group2$p.value
+
+# group 3
+data <- matrix(as.numeric(c(response_table_McNemar[2,2], 
+                            response_table_McNemar[2,3],
+                            response_table_McNemar[2,4],
+                            response_table_McNemar[2,5])),
+                            nrow = 2, ncol = 2, byrow = TRUE)
+stats_chi_resp_group3 <- mcnemar.test(data)
+print(stats_chi_resp_group3)
+
+data <- matrix(as.numeric(c(remission_table_McNemar[2,2],
+                            remission_table_McNemar[2,3],
+                            remission_table_McNemar[2,4],
+                            remission_table_McNemar[2,5])),
+                            nrow = 2, ncol = 2, byrow = TRUE)
+stats_chi_rem_group3 <- mcnemar.test(data)
+print(stats_chi_rem_group3)
+
+results[7,3] <- stats_chi_resp_group3$statistic
+results[7,4] <- stats_chi_resp_group3$p.value
+results[8,3] <- stats_chi_rem_group3$statistic
+results[8,4] <- stats_chi_rem_group3$p.value
+
+# # do paired t-tests, group 1
+# data_insted_group <- data_insted %>% 
+#                     select(c("W7PHQ9","W10PHQ9")) %>% 
+#                     filter(data_insted$wk10_model_group == 1)
+#             
+# before <- na.omit(data_insted_group$W7PHQ9)
+# after <- na.omit(data_insted_group$W10PHQ9)
+# stats_t <- t.test(before, after, paired = TRUE)
+# results[1, 3] <- stats_t$statistic
+# results[1, 4] <- stats_t$p.value
+# cohens_d <- cohen.d(before, after, paired = TRUE)
+# results[1, 5] <- cohens_d$estimate
+
+# do paired t-tests, group 2
+data_insted_group <- data_insted %>% 
+                    select(c("W7PHQ9","W10PHQ9")) %>% 
+                    filter(data_insted$wk10_model_group == 2)
+            
+before <- na.omit(data_insted_group$W7PHQ9)
+after <- na.omit(data_insted_group$W10PHQ9)
+stats_t <- t.test(before, after, paired = TRUE)
+results[1, 3] <- stats_t$statistic
+results[1, 4] <- stats_t$p.value
+cohens_d <- cohen.d(before, after, paired = TRUE)
+results[1, 5] <- cohens_d$estimate
+
+# do paired t-tests, group 3
+data_insted_group <- data_insted %>% 
+                    select(c("W7PHQ9","W10PHQ9")) %>% 
+                    filter(data_insted$wk10_model_group == 3)
+before <- na.omit(data_insted_group$W7PHQ9)
+after <- na.omit(data_insted_group$W10PHQ9)
+stats_t <- t.test(before, after, paired = TRUE)
+results[5, 3] <- stats_t$statistic
+results[5, 4] <- stats_t$p.value
+cohens_d <- cohen.d(before, after, paired = TRUE)
+results[5, 5] <- cohens_d$estimate
+```
+
+## do tabular analyses on wk7 and wk10 models, also calculating the kappa value
+
+```{r}
+# install.packages("irr")
+library(irr)
+
+trajectory_data_clean$wk10_model_groupF <- factor(trajectory_data_clean$wk10_model_group, levels = c(1,2,3,4))
+trajectory_data_clean$wk7_model_groupF <- factor(trajectory_data_clean$wk7_model_group, levels = c(1,2,3,4))
+
+observed <- table(trajectory_data_clean$wk10_model_groupF, 
+      trajectory_data_clean$wk7_model_groupF)
+observed
+
+kappa2(cbind(trajectory_data_clean$wk10_model_groupF, trajectory_data_clean$wk7_model_groupF))
+```
+
+## count the missing values of each weeks' PHQ scores
+
+```{r}
+# install.packages("tidyverse")
+library(tidyverse)
+library(dplyr)
+
+# Week 10 model
+# count the absolute number of the missing value in each group
+missing_counts_wk10 <- trajectory_data_clean %>%
+  group_by(wk10_model_groupF) %>%
+  select(25:35) %>%
+  summarise_all(funs(sum(is.na(.))))
+
+# get the number of participants in each group
+group_num_wk10 <- count(trajectory_data_clean,wk10_model_groupF)
+group_num_wk10
+
+# do chi square test at all different time points
+stats_table <- cbind(rep(0, 10), rep(0, 10), rep(0, 10), rep(0, 10), rep(0, 10), rep(0, 10))
+colnames(stats_table) <- c('n_missing1', 'n_missing2', 'n_missing3', 'n_missing4','stats','p')
+for (iTime in 3:12){
+  current_missing_counts <- missing_counts_wk10[,iTime]
+  current_nonMissing_counts <- group_num_wk10[,2]-current_missing_counts
+  current_table <- cbind(current_missing_counts, current_nonMissing_counts)
+  results_chi <- chisq.test(current_table)
+  stats_table[iTime-2,5] <- results_chi$statistic
+  stats_table[iTime-2,6] <- results_chi$p.value
+  stats_table[iTime-2,1:4] <- t(current_missing_counts)
+}
+
+# get the relative missing value number to the absolute number of subjects
+missing_counts_wk10z <- missing_counts_wk10 %>%
+  select(2:ncol(.)) %>%
+  mutate_all(~./group_num_wk10$n)
+
+# add a group and model label
+missing_counts_wk10z <- cbind(group_num_wk10$wk10_model_groupF,missing_counts_wk10z)
+names(missing_counts_wk10z)[1] <- "Group"
+
+# coverting wide data to long data
+missing_counts_wk10z_long <- missing_counts_wk10z %>%
+  pivot_longer(
+    cols = 2:ncol(.),
+    names_to = "Weeks",
+    values_to = "Missing_z"
+  )
+missing_counts_wk10z_long$Time <- factor(
+          missing_counts_wk10z_long$Weeks, 
+          levels = c("Y","W1PHQ9","W2PHQ9","W3PHQ9","W4PHQ9","W5PHQ9","W6PHQ9","W7PHQ9","W8PHQ9","W9PHQ9","W10PHQ9"), 
+          labels = as.character(c(0:10))
+          )
+
+missing_counts_wk10z_long$Group <- factor(
+                        missing_counts_wk10z_long$Group, 
+                        levels = c(1,2,3,4),
+                        labels = c("Rapid response, standard treatment length", "Rapid response, extended plateau", "Linear response, extended course", "Nonresponse"))
+
+# Week 7 model
+# count the absolute number of the missing value in each group
+missing_counts_wk7 <- trajectory_data_clean %>%
+  group_by(wk7_model_groupF) %>%
+  select(25:35) %>%
+  summarise_all(funs(sum(is.na(.))))
+
+# get the number of participants in each group
+group_num_wk7 <- count(trajectory_data_clean,wk7_model_groupF)
+group_num_wk7
+
+# get the relative missing value number to the absolute number of subjects
+missing_counts_wk7z <- missing_counts_wk7 %>%
+  select(2:ncol(.)) %>%
+  mutate_all(~./group_num_wk7$n)
+
+# add a group label
+missing_counts_wk7z <- cbind(group_num_wk7$wk7_model_groupF,missing_counts_wk7z)
+names(missing_counts_wk7z)[1] <- "Group"
+
+# coverting wide data to long data
+missing_counts_wk7z_long <- missing_counts_wk7z %>%
+  pivot_longer(
+    cols = 2:ncol(.),
+    names_to = "Weeks",
+    values_to = "Missing_z"
+  )
+missing_counts_wk7z_long$Time <- factor(
+                  missing_counts_wk7z_long$Weeks, 
+                  levels = c("Y","W1PHQ9","W2PHQ9","W3PHQ9","W4PHQ9","W5PHQ9","W6PHQ9","W7PHQ9","W8PHQ9","W9PHQ9","W10PHQ9"), 
+                  labels = c(as.character(c(0:10)))
+                  )
+missing_counts_wk7z_long$Group <- factor(
+                    missing_counts_wk7z_long$Group, 
+                    levels = c(1,2,3,4),
+                    labels = c("Rapid response", "Response, plateau", "Linear response", "Nonresponse")
+                    )
+
+```
+
+## plot some supplementary figures
+
+the bar plots and the line plot showing the ratios of missing values in each group
+
+```{r}
+# plot with ggplot2
+# install.packages("ggplot2")
+library(ggplot2)
+# install.packages("devtools")
+devtools::install_github("thomasp85/patchwork")
+library(patchwork)
+
+# plotting a bar plot showing each group's subject number
+# week 10 model
+ggplot(group_num_wk10, aes(x = wk10_model_groupF, y = n)) +
+  geom_bar(stat = "identity") +
+  xlab("Group") +
+  ylab("Number of subjects") +
+  ggtitle("Week 10 model") +
+  theme_classic(base_size = 20)
+ggsave("wk10model_subject_n.png", width = 10, height = 10, dpi = 600)
+
+#week 7 model
+ggplot(group_num_wk7, aes(x = wk7_model_groupF, y = n)) +
+  geom_bar(stat = "identity") +
+  xlab("Group") +
+  ylab("Number of subjects") +
+  ggtitle("Week 7 model") +
+  theme_classic(base_size = 20)
+ggsave("wk7model_subject_n.png", width = 10, height = 10, dpi = 600)
+
+# plotting the line plots showing the missing percentage of each groups
+# week 10 model
+ggplot(missing_counts_wk10z_long, aes(x = Time, y = Missing_z, group = Group, color = Group)) +
+  geom_line(size = 1.5) +
+  labs(x = "Week", y = "Ratios of missing values", color = "Group") +
+  theme_classic(base_size = 20) +
+  scale_color_manual(values=c('#FF0060','#0079FF','#00DFA2','#FFE194'))+
+  theme(legend.text = element_text(size = 16))
+
+ggsave("ratio_missing_value.png", width = 13, height = 8, dpi = 600)
+
+# week 7 model 
+
+# p2 <- ggplot(missing_counts_wk7z_long, aes(x = Time, y = Missing_z, group = Group, color = Group)) + # geom_line(size = 1) + # labs(x = "Time", y = "Relative number of Missing Values", color = "Group") + # ggtitle("Relative number of missing values (Week 7 data)") + # theme_classic(base_size = 20) + # theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) # # ggsave("wk10model_relative_missing_value.png", width = 10, height = 8, dpi = 600)
+
+```
+
+## Plotting dot and line figures with shaded error bars, main results
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+
+#+++++++++++++++++++++++++
+# Function to calculate the mean and the standard deviation
+  # for each group
+#+++++++++++++++++++++++++
+# data : a data frame
+# varname : the name of a column containing the variable
+  #to be summariezed
+# groupnames : vector of column names to be used as
+  # grouping variables
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+
+# select data
+data_dot_line <- trajectory_data_clean %>%
+                select(c(
+                        "Y","W1PHQ9", "W2PHQ9", "W3PHQ9", "W4PHQ9", "W5PHQ9",
+                        "W6PHQ9", "W7PHQ9", "W8PHQ9", "W9PHQ9", "W10PHQ9",
+                        "wk10_model_group"
+                        )
+                       )
+# exclude group 4 from week 8-10
+data_dot_line <- data_dot_line %>% 
+                mutate(W8PHQ9 = ifelse(wk10_model_group == 4, NA, W8PHQ9),
+                       W9PHQ9 = ifelse(wk10_model_group == 4, NA, W8PHQ9),
+                       W10PHQ9 = ifelse(wk10_model_group == 4, NA, W10PHQ9)
+                       )
+names(data_dot_line)[1:11] <- as.character(c(0:10))
+data_dtl_long <- data_dot_line %>%
+              pivot_longer(
+                cols = as.character(c(0:10)),
+                names_to = "Time",
+                values_to = "Value"
+              )
+df_summary <- data_summary(data_dtl_long, varname="Value", 
+                    groupnames=c("Time", "wk10_model_group"))
+names(df_summary)[2] <- "Group"
+df_summary$Group <- as.factor(df_summary$Group)
+df_summary$Group <- factor(df_summary$Group, levels = c("1", "2", "3", "4"), labels = c("Rapid response, standard treatment length", "Rapid response, extended plateau", "Linear response, extended course", "Nonresponse"))
+
+# dot/line plot of week 10 model
+ggplot(df_summary, aes(x= as.integer(Time), y=Value, group=Group, color=Group)) + 
+  geom_line(size = 1) + xlab("Week") + ylab("PHQ-9 score") +
+  geom_point(size = 3) +
+  geom_ribbon(aes(ymin=Value-sd, ymax=Value+sd), fill = "grey70", alpha = .4, colour = NA) +
+  scale_y_continuous(limits = c(-0.5, 30), breaks = seq(0, 30, by = 5)) +
+  scale_x_continuous(limits = c(-0.5, 11), breaks = c(0:10)) +
+  scale_color_manual(values=c('#FF0060','#0079FF','#00DFA2','#FFE194')) +
+  theme_classic(base_size = 20) + 
+  theme(legend.text = element_text(size = 12))
+
+ggsave("wk10model_trajectory.png", width = 10, height = 5, dpi = 600)
+
+
+# select data
+data_dot_line <- trajectory_data_clean %>%
+                select(c(
+                        "Y","W1PHQ9", "W2PHQ9", "W3PHQ9", "W4PHQ9", "W5PHQ9",
+                        "W6PHQ9", "W7PHQ9",
+                        "wk7_model_group"
+                        )
+                       )
+names(data_dot_line)[1:8] <- as.character(c(0:7))
+data_dtl_long <- data_dot_line %>%
+              pivot_longer(
+                cols = as.character(c(0:7)),
+                names_to = "Time",
+                values_to = "Value"
+              )
+df_summary <- data_summary(data_dtl_long, varname="Value", 
+                    groupnames=c("Time", "wk7_model_group"))
+names(df_summary)[2] <- "Group"
+df_summary$Group <- as.factor(df_summary$Group)
+df_summary$Group <- factor(df_summary$Group, levels = c("1", "2", "3", "4"), labels = c("Rapid response, standard treatment length", "Rapid response, extended plateau", "Linear response, extended course", "Nonresponse"))
+
+# dot/line plot of week 7 model
+ggplot(df_summary, aes(x= as.integer(Time), y=Value, group=Group, color=Group)) + 
+  geom_line(size = 1) + xlab("Week") + ylab("PHQ-9 score") +
+  geom_point(size = 3) +
+  geom_ribbon(aes(ymin=Value-sd, ymax=Value+sd), fill = "grey70", alpha = .4, colour = NA) +
+  scale_y_continuous(limits = c(-0.5, 30), breaks = seq(0, 30, by = 5)) +
+  scale_x_continuous(limits = c(-0.5, 8), breaks = c(0:7)) +
+  scale_color_manual(values=c('#FF0060','#0079FF','#00DFA2','#FFE194')) +
+  theme_classic(base_size = 20) + 
+  theme(legend.text = element_text(size = 12))
+
+ggsave("wk7model_trajectory.png", width = 10, height = 5, dpi = 600)
+```
