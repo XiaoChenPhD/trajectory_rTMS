@@ -15,7 +15,7 @@ import excel Salience_data.xlsx, sheet(1) firstrow
 *drop duplicate subjects and patients that are "opted for additional treatments"
 drop if substr(EnrolledinStudy,1,5) == "Opted"
 
-* drop patients marked as red, who were with a PHQ-9 score > 5 and < 10
+* drop patients marked as red, who were with a baseline PHQ-9 score >= 5 and < 10
 drop if RID == "RID-16081"
 drop if RID == "RID-00127"
 drop if RID == "RID-00551"
