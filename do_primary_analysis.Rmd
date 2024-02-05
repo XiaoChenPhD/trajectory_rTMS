@@ -1,16 +1,18 @@
 ---
-title: "Primary analyses"
+title: "main_analysis"
 output:
   html_document: default
   pdf_document: default
-date: "2023-07-19"
+date: "2023-03-13"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Main analyses of the trajectory project that is based on the four-group model
+## Main analyses of the trajectory project Based on the four-group model
+
+group 1,2,4 cubic, group 3 quadratic. Comparing the group info of week 7 and week 10 models 2. do stats on the number of missing values of each
 
 ```{r}
 # import data
@@ -27,18 +29,258 @@ trajectory_data_clean <- cbind(trajectory_data_clean, wk10_group)
 trajectory_data_clean <- cbind(trajectory_data_clean, wk7_group)
 ```
 
-## Secondary analysis
-
-Comparing the PHQ-9 scores, remission rates (PHQ-9 \< 5), response rate (reduction rates of PHQ-9 score ≥ 50%) at week 1, week7, and week 10 for all four groups
+## Getting the cumulative response and remission rates
 
 ```{r}
 library(tidyverse)
 library(dplyr)
-# install.packages("compute.es")  # Run this line if you haven't installed the package
 library(compute.es)
 library(effsize)
 
-# select data, only included subjects with data at 
+# For supplementary table, calculate the remission and response rates for all 4 groups
+# select data
+data_insted <- trajectory_data_clean %>%
+                select(c(
+                        "Y","W1PHQ9", "W2PHQ9", "W3PHQ9", "W4PHQ9", "W5PHQ9",
+                        "W6PHQ9", "W7PHQ9", "W8PHQ9", "W9PHQ9", "W10PHQ9",
+                        "wk10_model_group"
+                        )
+                       ) 
+
+W1_all <- data_insted %>% 
+       summarize(remission_n_all  = sum(W1PHQ9 < 5, na.rm = TRUE),
+                 response_n_all = sum((Y - W1PHQ9) / Y >= 0.5, na.rm = TRUE),
+                 remission_rate_all = sum(W1PHQ9 < 5, na.rm = TRUE) / n(),
+                 response_rate_all = sum((Y - W1PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                 )
+
+W2_all <- data_insted %>% 
+       summarize(remission_n_all  = sum(W2PHQ9 < 5, na.rm = TRUE),
+                response_n_all = sum((Y - W2PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate_all = sum(W2PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate_all = sum((Y - W2PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+W3_all <- data_insted %>% 
+       summarize(remission_n_all  = sum(W3PHQ9 < 5, na.rm = TRUE),
+                response_n_all = sum((Y - W3PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate_all = sum(W3PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate_all = sum((Y - W3PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+W4_all <- data_insted %>% 
+       summarize(remission_n_all  = sum(W4PHQ9 < 5, na.rm = TRUE),
+                response_n_all = sum((Y - W4PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate_all = sum(W4PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate_all = sum((Y - W4PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+W5_all <- data_insted %>% 
+       summarize(remission_n_all  = sum(W5PHQ9 < 5, na.rm = TRUE),
+                response_n_all = sum((Y - W5PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate_all = sum(W5PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate_all = sum((Y - W5PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+W6_all <- data_insted %>% 
+       summarize(remission_n_all  = sum(W6PHQ9 < 5, na.rm = TRUE),
+                response_n_all = sum((Y - W6PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate_all = sum(W6PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate_all = sum((Y - W6PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+W7_all <- data_insted %>% 
+       summarize(remission_n_all  = sum(W7PHQ9 < 5, na.rm = TRUE),
+                response_n_all = sum((Y - W7PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate_all = sum(W7PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate_all = sum((Y - W7PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+# For week 8-10, I simply added the response_n and remission_n in week 8-10 to the response_n and remission_n in week 7 and minus those who were reponse or remission but remain to a prolonged session
+response_remain <- data_insted %>%
+                  summarize(response_remain_n = sum((Y - W7PHQ9) / Y >= 0.5 & (Y - W8PHQ9) / Y >= 0.5, na.rm = TRUE)
+                  )
+
+remission_remain <- data_insted %>%
+                  summarize(remission_remain_n = sum(W7PHQ9 < 5 & W8PHQ9 < 5, na.rm = TRUE)
+                  )
+
+data_insted_prolonged <- trajectory_data_clean %>%
+                select(c(
+                        "Y","W1PHQ9", "W2PHQ9", "W3PHQ9", "W4PHQ9", "W5PHQ9",
+                        "W6PHQ9", "W7PHQ9", "W8PHQ9", "W9PHQ9", "W10PHQ9",
+                        "wk10_model_group"
+                        )
+                       ) %>%
+                filter(!is.na(W8PHQ9))
+
+W8_all <- data_insted_prolonged %>%
+                summarize(remission_n_all = sum(W8PHQ9 < 5, na.rm = TRUE),
+                          response_n_all = sum((Y - W8PHQ9) / Y >= 0.5, na.rm = TRUE)
+                          ) %>%
+                reframe(remission_n_all = remission_n_all + W7_all$remission_n_all - remission_remain$remission_remain_n,
+                        response_n_all = response_n_all + W7_all$response_n_all - response_remain$response_remain_n,
+                        remission_rate_all = remission_n_all/324,
+                        response_rate_all = response_n_all/324
+                        )
+
+W9_all <- data_insted_prolonged %>%
+                summarize(remission_n_all = sum(W9PHQ9 < 5, na.rm = TRUE),
+                          response_n_all = sum((Y - W9PHQ9) / Y >= 0.5, na.rm = TRUE)
+                          ) %>%
+                reframe(remission_n_all = remission_n_all + W7_all$remission_n_all - remission_remain$remission_remain_n,
+                        response_n_all = response_n_all + W7_all$response_n_all - response_remain$response_remain_n,
+                        remission_rate_all = remission_n_all/324,
+                        response_rate_all = response_n_all/324
+                        )
+
+W10_all <- data_insted_prolonged %>%
+                summarize(remission_n_all = sum(W10PHQ9 < 5, na.rm = TRUE),
+                          response_n_all = sum((Y - W10PHQ9) / Y >= 0.5, na.rm = TRUE)
+                          ) %>%
+                reframe(remission_n_all = remission_n_all + W7_all$remission_n_all - remission_remain$remission_remain_n,
+                        response_n_all = response_n_all + W7_all$response_n_all - response_remain$response_remain_n,
+                        remission_rate_all = remission_n_all/324,
+                        response_rate_all = response_n_all/324
+                        )
+
+# grouped results
+W1 <- data_insted %>%       
+  group_by(wk10_model_group) %>%
+      summarize(remission_n  = sum(W1PHQ9 < 5, na.rm = TRUE),
+                response_n = sum((Y - W1PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate = sum(W1PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate = sum((Y - W1PHQ9) / Y >= 0.5, na.rm = TRUE) / n(),
+                N = n()
+                )
+
+W2 <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(remission_n  = sum(W2PHQ9 < 5, na.rm = TRUE),
+                response_n = sum((Y - W2PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate = sum(W2PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate = sum((Y - W2PHQ9) / Y >= 0.5, na.rm = TRUE) / n())
+
+W3 <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(remission_n  = sum(W3PHQ9 < 5, na.rm = TRUE),
+                response_n = sum((Y - W3PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate = sum(W3PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate = sum((Y - W3PHQ9) / Y >= 0.5, na.rm = TRUE) / n())
+
+W4 <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(remission_n  = sum(W4PHQ9 < 5, na.rm = TRUE),
+                response_n = sum((Y - W4PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate = sum(W4PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate = sum((Y - W4PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+W5 <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(remission_n  = sum(W5PHQ9 < 5, na.rm = TRUE),
+                response_n = sum((Y - W5PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate = sum(W5PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate = sum((Y - W5PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+W6 <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(remission_n  = sum(W6PHQ9 < 5, na.rm = TRUE),
+                response_n = sum((Y - W6PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate = sum(W6PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate = sum((Y - W6PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+W7 <- data_insted %>% 
+      group_by(wk10_model_group) %>%
+      summarize(remission_n  = sum(W7PHQ9 < 5, na.rm = TRUE),
+                response_n = sum((Y - W7PHQ9) / Y >= 0.5, na.rm = TRUE),
+                remission_rate = sum(W7PHQ9 < 5, na.rm = TRUE) / n(),
+                response_rate = sum((Y - W7PHQ9) / Y >= 0.5, na.rm = TRUE) / n()
+                )
+
+# get the remaining subjects who repspond to treatment or were already in remission
+response_remain_group <- data_insted %>%
+                  group_by(wk10_model_group) %>%
+                  summarize(response_remain_n = sum((Y - W7PHQ9) / Y >= 0.5 & (Y - W8PHQ9) / Y >= 0.5, na.rm = TRUE)
+                  )
+remission_remain_group <- data_insted %>%
+                  group_by(wk10_model_group) %>%
+                  summarize(remission_remain_n = sum(W7PHQ9 < 5 & W8PHQ9 < 5, na.rm = TRUE)
+                  )
+
+W8 <- data_insted_prolonged %>%
+                group_by(wk10_model_group) %>%
+                summarize(remission_n = sum(W8PHQ9 < 5, na.rm = TRUE),
+                          response_n = sum((Y - W8PHQ9) / Y >= 0.5, na.rm = TRUE)
+                        ) 
+W8 <- rbind(list(1,0,0),W8)
+W8 <- W8 %>%
+          reframe(wk10_model_group = wk10_model_group,
+            remission_n = remission_n + W7$remission_n - remission_remain_group$remission_remain_n,
+                  response_n = response_n + W7$response_n - response_remain_group$response_remain_n,
+                  remission_rate = remission_n/W1$N,
+                  respoinse_rate = response_n/W1$N
+                        )
+
+W9 <- data_insted_prolonged %>%
+                group_by(wk10_model_group) %>%
+                summarize(remission_n = sum(W9PHQ9 < 5, na.rm = TRUE),
+                          response_n = sum((Y - W9PHQ9) / Y >= 0.5, na.rm = TRUE)
+                        ) 
+W9 <- rbind(list(1,0,0),W9)
+W9 <- W9 %>%
+          reframe(wk10_model_group = wk10_model_group,
+            remission_n = remission_n + W7$remission_n - remission_remain_group$remission_remain_n,
+                  response_n = response_n + W7$response_n - response_remain_group$response_remain_n,
+                  remission_rate = remission_n/W1$N,
+                  respoinse_rate = response_n/W1$N
+                        )
+
+W10 <- data_insted_prolonged %>%
+                group_by(wk10_model_group) %>%
+                summarize(remission_n = sum(W10PHQ9 < 5, na.rm = TRUE),
+                          response_n = sum((Y - W10PHQ9) / Y >= 0.5, na.rm = TRUE)
+                        ) 
+W10 <- rbind(list(1,0,0),W10)
+W10 <- W10 %>%
+          reframe(wk10_model_group = wk10_model_group,
+            remission_n = remission_n + W7$remission_n - remission_remain_group$remission_remain_n,
+                  response_n = response_n + W7$response_n - response_remain_group$response_remain_n,
+                  remission_rate = remission_n/W1$N,
+                  respoinse_rate = response_n/W1$N
+                        )
+
+# do chi square analysis on remission and response data for all 4 groups
+data_frames <- list(W1, W2, W3, W4, W5, W6, W7, W8, W9, W10)
+stats_table_response = cbind(rep(0,10),rep(0,10))
+stats_table_remission = cbind(rep(0,10),rep(0,10))
+for (i in 1:10){
+  current_table <- cbind(data_frames[[i]][,3], W1$N-data_frames[[i]][,3])
+  results_chi <- chisq.test(current_table)
+  stats_table_response[i,1] <- results_chi$statistic
+  stats_table_response[i,2] <- results_chi$p.value
+  
+  current_table <- cbind(data_frames[[i]][,2], W1$N-data_frames[[i]][,2])
+  results_chi <- chisq.test(current_table)
+  stats_table_remission[i,1] <- results_chi$statistic
+  stats_table_remission[i,2] <- results_chi$p.value
+}
+
+```
+
+## To do secondary analysis
+
+comparing the PHQ-9 scores, remission rates (PHQ-9 \< 5), response rate (reduction rates of PHQ-9 score ≥ 50%) at week 1, week7, and week 10 for all four groups
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(compute.es)
+library(effsize)
+
+# select data
 data_insted <- trajectory_data_clean %>%
                 select(c(
                         "Y","W1PHQ9", "W2PHQ9", "W3PHQ9", "W4PHQ9", "W5PHQ9",
@@ -47,7 +289,6 @@ data_insted <- trajectory_data_clean %>%
                         )
                        ) %>%
                 filter(!is.na(W7PHQ9) & !is.na(W10PHQ9))
-
 # calculate the response rate and the remission rate
 W7 <- data_insted %>% 
       group_by(wk10_model_group) %>%
@@ -74,15 +315,6 @@ results_wk10 <- rbind(t(W10[1,5:8]), t(W10[2,5:8]), t(W10[3,5:8]))
 results <- cbind(results_wk7,results_wk10)
 results <- cbind(results, c(rep(0, 12)), c(rep(0, 12)), c(rep(0, 12)))
 colnames(results)[1:5] <- c('week 7', 'week 10', 't/chi2', 'p', 'cohend')
-
-# # chi-square test to compare group differences, might be problematic!!
-# response_table <- cbind(W10$response_n[1:2], W10$N[1:2] - W10$response_n[1:2])
-# result <- chisq.test(response_table)
-# 
-# remission_table <- cbind(W10$remission_n[1:2], W10$N[1:2] - W10$remission_n[1:2])
-# result <- chisq.test(remission_table)
-# print(result)
-# 
 
 # McNemar test
 remission_table_McNemar <- data_insted %>% 
@@ -170,12 +402,16 @@ cohens_d <- cohen.d(before, after, paired = TRUE)
 results[5, 5] <- cohens_d$estimate
 ```
 
-## do tabular analyses on wk7 and wk10 models, also calculating the kappa value
+## Comparing Wk7 and Wk10 models
+
+To do tabular analyses on wk7 and wk10 models, also calculating the kappa value
+
+To perform analyses comparing the age, sex ratio, and baseline depressive symptoms between wk7 group and wk10 groups
 
 ```{r}
-# install.packages("irr")
 library(irr)
 
+# Calculating the kappa value
 trajectory_data_clean$wk10_model_groupF <- factor(trajectory_data_clean$wk10_model_group, levels = c(1,2,3,4))
 trajectory_data_clean$wk7_model_groupF <- factor(trajectory_data_clean$wk7_model_group, levels = c(1,2,3,4))
 
@@ -184,12 +420,54 @@ observed <- table(trajectory_data_clean$wk10_model_groupF,
 observed
 
 kappa2(cbind(trajectory_data_clean$wk10_model_groupF, trajectory_data_clean$wk7_model_groupF))
+
+# Comparing the age, sex ratio, and the baseline depressive symptoms
+# ages
+group_label <- 1
+age_wk7 <- trajectory_data_clean$AgeMTDay[wk7_group == group_label]
+df_age_wk7 <- data.frame(age = age_wk7, group = rep(1, length(age_wk7)))
+
+age_wk10 <- trajectory_data_clean$AgeMTDay[wk10_group == group_label]
+df_age_wk10 <- data.frame(age = age_wk10, group = rep(2, length(age_wk10)))
+
+df_age = rbind(df_age_wk7, df_age_wk10)
+result <- t.test(age ~ group, data = df_age, var.equal = TRUE)
+print(result)
+
+# baseline depressive symptoms
+dep_wk7 <- trajectory_data_clean$BaselinePHQ9[wk7_group == group_label]
+df_dep_wk7 <- data.frame(dep = dep_wk7, group = rep(1, length(dep_wk7)))
+
+dep_wk10 <- trajectory_data_clean$BaselinePHQ9[wk10_group == group_label]
+df_dep_wk10 <- data.frame(dep = dep_wk10, group = rep(2, length(dep_wk10)))
+
+df_dep = rbind(df_dep_wk7, df_dep_wk10)
+result <- t.test(dep ~ group, data = df_dep, var.equal = TRUE)
+print(result)
+
+# sex ratio
+df4chi <- data.frame(wk7=c(0,0), wk10=c(0,0))
+a1 <- trajectory_data_clean %>%
+  filter(wk7_model_group == group_label, BiologicalSexandGenderifDi == 1) %>%
+  summarise(count = n())
+a2 <- trajectory_data_clean %>%
+  filter(wk7_model_group == group_label, BiologicalSexandGenderifDi == 2) %>%
+  summarise(count = n())
+
+b1 <- trajectory_data_clean %>%
+  filter(wk10_model_group == group_label, BiologicalSexandGenderifDi == 1) %>%
+  summarise(count = n())
+b2 <- trajectory_data_clean %>%
+  filter(wk10_model_group == group_label, BiologicalSexandGenderifDi == 2) %>%
+  summarise(count = n())
+contingency_table <- as.table(rbind(c(a1$count, a2$count), c(b1$count, b2$count)))
+results_chi <- chisq.test(contingency_table)
+print(results_chi)
 ```
 
-## Counting the missing values of each weeks' PHQ scores
+## count the missing values of each weeks' PHQ scores
 
 ```{r}
-# install.packages("tidyverse")
 library(tidyverse)
 library(dplyr)
 
@@ -242,7 +520,7 @@ missing_counts_wk10z_long$Time <- factor(
 missing_counts_wk10z_long$Group <- factor(
                         missing_counts_wk10z_long$Group, 
                         levels = c(1,2,3,4),
-                        labels = c("Rapid response, standard treatment length", "Rapid response, extended plateau", "Linear response, extended course", "Nonresponse"))
+                        labels = c("Rapid response, standard treatment length", "Slowed response", "Linear response, extended course", "Nonresponse"))
 
 # Week 7 model
 # count the absolute number of the missing value in each group
@@ -281,19 +559,15 @@ missing_counts_wk7z_long$Group <- factor(
                     levels = c(1,2,3,4),
                     labels = c("Rapid response", "Response, plateau", "Linear response", "Nonresponse")
                     )
-
 ```
 
-## Plotting some supplementary figures
+## To plot some supplementary figures
 
-The bar plots and the line plot showing the ratios of missing values in each group
+the bar plots and the line plot showing the ratios of missing values in each group
 
 ```{r}
 # plot with ggplot2
-# install.packages("ggplot2")
 library(ggplot2)
-# install.packages("devtools")
-devtools::install_github("thomasp85/patchwork")
 library(patchwork)
 
 # plotting a bar plot showing each group's subject number
@@ -385,7 +659,7 @@ df_summary <- data_summary(data_dtl_long, varname="Value",
                     groupnames=c("Time", "wk10_model_group"))
 names(df_summary)[2] <- "Group"
 df_summary$Group <- as.factor(df_summary$Group)
-df_summary$Group <- factor(df_summary$Group, levels = c("1", "2", "3", "4"), labels = c("Rapid response, standard treatment length", "Rapid response, extended plateau", "Linear response, extended course", "Nonresponse"))
+df_summary$Group <- factor(df_summary$Group, levels = c("1", "2", "3", "4"), labels = c("Rapid response, standard treatment length", "Slowed response", "Linear response, extended course", "Nonresponse"))
 
 # dot/line plot of week 10 model
 ggplot(df_summary, aes(x= as.integer(Time), y=Value, group=Group, color=Group)) + 
@@ -398,7 +672,7 @@ ggplot(df_summary, aes(x= as.integer(Time), y=Value, group=Group, color=Group)) 
   theme_classic(base_size = 20) + 
   theme(legend.text = element_text(size = 12))
 
-ggsave("wk10model_trajectory.png", width = 10, height = 5, dpi = 600)
+ggsave("wk10model_trajectory.tiff", width = 10, height = 5, dpi = 600)
 
 
 # select data
@@ -420,7 +694,7 @@ df_summary <- data_summary(data_dtl_long, varname="Value",
                     groupnames=c("Time", "wk7_model_group"))
 names(df_summary)[2] <- "Group"
 df_summary$Group <- as.factor(df_summary$Group)
-df_summary$Group <- factor(df_summary$Group, levels = c("1", "2", "3", "4"), labels = c("Rapid response, standard treatment length", "Rapid response, extended plateau", "Linear response, extended course", "Nonresponse"))
+df_summary$Group <- factor(df_summary$Group, levels = c("1", "2", "3", "4"), labels = c("Rapid response, standard treatment length", "Slowed response", "Linear response, extended course", "Nonresponse"))
 
 # dot/line plot of week 7 model
 ggplot(df_summary, aes(x= as.integer(Time), y=Value, group=Group, color=Group)) + 

@@ -1,7 +1,7 @@
 ---
 title: "Logistic_Analysis"
 author: "Xiao Chen"
-date: "2023-07-19"
+date: "2023-03-27"
 output: html_document
 ---
 
@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Importing data
+## import data
 
 ```{r}
 rm(list = ls())
@@ -23,11 +23,9 @@ df$Group_Weights <- ifelse(df$X_traj_Group == 1, df$X_traj_ProbG1,
                                         )))
 ```
 
-## Adding a variable named "Anxiety" and "biological sex"
+## add a variable named "Anxiety" and "biological sex"
 
-Anxiety, 0: no reported comorbidities 1: with anxiety (may include other comorbidities)
-
-Biological sex, 0: biological male, 1: biological female
+0: no reported comorbidities 1: with anxiety (may include other comorbidities) 2: only other comorbidities
 
 ```{r}
 library(tidyverse)
@@ -53,12 +51,12 @@ df <- df %>%
     )
   )
 df$BiologicalSex <- as.factor(df$BiologicalSex)
+
 ```
 
 ## Dealing with the medication info table
 
 ```{r}
-# install.packages("readxl")
 library(readxl)
 library(dplyr)
 
@@ -224,14 +222,92 @@ df <- cbind(df,
             meds_selected$SSRI_SNRI_use, 
             meds_selected$AD_use,
             meds_selected$Lithium_use)
+
+# medication changes
+med_history <- meds_selected %>% select(starts_with("EndDate"))
+filtered_data <- med_history %>%
+  filter(if_any(everything(), ~ .x != "Current" & !is.na(.x)))
 ```
 
-## Making demographical table
+## Comparing clinical characteristics among 4 groups
 
 ```{r}
-# install.packages("gtsummary")
+library(dplyr)
+library(stringr)
+
+
+table1 <- df %>%
+  select(c(
+    "AgeMTDay",
+    "BiologicalSex",
+    "BaselinePHQ9",
+    "Anxiety",
+    "X_traj_Group",
+    "meds_selected$SSRI_SNRI_use",
+    "meds_selected$TCA_use",
+    "meds_selected$OtherAD_use",
+    "meds_selected$benzo_use",
+    "meds_selected$Augmenting_use",
+    "meds_selected$anticonvulsant_use",
+    "meds_selected$Lithium_use",
+    "ofCompletedTreatments",
+    "FinalTxDate",
+    "MTStartDate",
+    "ComorbiditiesNotDepression"
+    )) 
+table1$X_traj_Group <- as.factor(table1$X_traj_Group)
+table1 <- table1 %>%
+  mutate(Bipolar = if_else(str_detect(ComorbiditiesNotDepression, "Bipolar"), 1, 0))
+
+
+# anova comparing age
+result <- aov(AgeMTDay ~ X_traj_Group, data = table1)
+summary(result)
+
+# treatment lengths in weeks
+FinalTxDate <- as.Date(table1$FinalTxDate, format = "%d%b%Y")
+StartTxDate <- as.Date(table1$MTStartDate, format = "%d%b%Y")
+table1$Txlength <- as.numeric(FinalTxDate - StartTxDate)/7
+result <- aov(Txlength ~ X_traj_Group, data = table1)
+summary(result)
+tukey_test <- TukeyHSD(result)
+print(tukey_test)
+
+# session number
+result <- aov(ofCompletedTreatments ~ X_traj_Group, data = table1)
+summary(result)
+tukey_test <- TukeyHSD(result)
+print(tukey_test)
+
+# baseline symptom
+result <- aov(BaselinePHQ9 ~ X_traj_Group, data = table1)
+summary(result)
+tukey_test <- TukeyHSD(result)
+print(tukey_test)
+
+# chi squared analyses for sex ratio
+chisq.test(table1$X_traj_Group, table1$BiologicalSex, correct=FALSE)
+
+# anxiety
+chisq.test(table1$X_traj_Group, table1$Anxiety, correct=FALSE)
+
+# bipolar
+chisq.test(table1$X_traj_Group, table1$Bipolar, correct=FALSE)
+
+# medication
+chisq.test(table1$X_traj_Group, table1$`meds_selected$SSRI_SNRI_use`, correct=FALSE)
+chisq.test(table1$X_traj_Group, table1$`meds_selected$TCA_use`, correct=FALSE)
+chisq.test(table1$X_traj_Group, table1$`meds_selected$OtherAD_use`, correct=FALSE)
+chisq.test(table1$X_traj_Group, table1$`meds_selected$benzo_use`, correct=FALSE)
+chisq.test(table1$X_traj_Group, table1$`meds_selected$Augmenting_use`, correct=FALSE)
+chisq.test(table1$X_traj_Group, table1$`meds_selected$anticonvulsant_use`, correct=FALSE)
+chisq.test(table1$X_traj_Group, table1$`meds_selected$Lithium_use`, correct=FALSE)
+```
+
+## Make Table 1
+
+```{r}
 library(gtsummary)
-# install.packages("officer")
 library(officer)
 
 table1 <- df %>%
@@ -283,20 +359,153 @@ names(table1)[6:12] <- c("SSRI/SNRI use",
 group_summary <- table1 %>% 
   tbl_summary(by = "X_traj_Group",
             statistic = list(all_continuous() ~ "{mean} ({sd})"),
-            digits = list(all_continuous() ~ c(1, 1), all_categorical() ~ c(0, 1))
+            digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(0, 2))
             ) %>% 
   add_overall(col_label = "**Total sample**, N = {N}")
 
 group_summary
 ```
 
-## Doing multinomial logistic regression
+## To build a supplementary table showing clinical characteristics of BD patients
+
+```{r}
+library(gtsummary)
+library(officer)
+library(dplyr)
+library(stringr)
+
+filtered_df <- df %>% filter(str_detect(ComorbiditiesNotDepression, "Bipolar"))
+
+table1 <- filtered_df %>%
+  select(c(
+    "AgeMTDay",
+    "BiologicalSex",
+    "BaselinePHQ9",
+    "Anxiety",
+    "X_traj_Group",
+    "meds_selected$SSRI_SNRI_use",
+    "meds_selected$TCA_use",
+    "meds_selected$OtherAD_use",
+    "meds_selected$benzo_use",
+    "meds_selected$Augmenting_use",
+    "meds_selected$anticonvulsant_use",
+    "meds_selected$Lithium_use"
+    )) 
+
+table1$BiologicalSex <- factor(
+                      table1$BiologicalSex,
+                      levels = c(1:2),
+                      labels = c("Female", "Male")
+                        )
+table1$X_traj_Group <- factor(
+                      table1$X_traj_Group,
+                      levels = c(1:4),
+                      labels = c("Rapid response, standard treatment length", "Slowed response", "Linear response, extended course", "Nonresponse")
+                        )
+table1$BaselinePHQ9 <- as.integer(table1$BaselinePHQ9)
+table1$Anxiety <- factor(
+                    table1$Anxiety,
+                    levels = c(0,1),
+                    labels = c("No anxiety comorbidity", "Any anxiety comorbidity")
+)
+
+names(table1)[1] <- "Age (years)"
+names(table1)[2] <- "Sex"
+names(table1)[3] <- "Baseline depressive symptoms"
+names(table1)[4] <- "Anxiety comorbidity"
+names(table1)[6:12] <- c("SSRI/SNRI use",
+                         "TCA use",
+                         "Other antidepressant use",
+                         "Benzodiazepine use",
+                         "Augmenting agent use",
+                         "Anticonvulsant use",
+                         "Lithium use"
+                         )
+
+group_summary <- table1 %>% 
+  tbl_summary(by = "X_traj_Group",
+            statistic = list(all_continuous() ~ "{mean} ({sd})"),
+            digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(0, 2))
+            ) %>% 
+  add_overall(col_label = "**Total sample**, N = {N}")
+
+group_summary
+```
+
+## To build a supplementary table showing clinical characteristics of patients with \> 36 session vs. 36 sessions and less
+
+```{r}
+library(gtsummary)
+library(officer)
+library(dplyr)
+library(stringr)
+
+df_session36 <- df %>% mutate(group_session = ifelse(ofCompletedTreatments > 36, 1, 2))
+
+table1 <- df_session36 %>%
+  select(c(
+    "AgeMTDay",
+    "BiologicalSex",
+    "BaselinePHQ9",
+    "Anxiety",
+    "group_session",
+    "meds_selected$SSRI_SNRI_use",
+    "meds_selected$TCA_use",
+    "meds_selected$OtherAD_use",
+    "meds_selected$benzo_use",
+    "meds_selected$Augmenting_use",
+    "meds_selected$anticonvulsant_use",
+    "meds_selected$Lithium_use"
+    )) 
+
+table1$BiologicalSex <- factor(
+                      table1$BiologicalSex,
+                      levels = c(1:2),
+                      labels = c("Female", "Male")
+                        )
+table1$group_session <- factor(
+                      table1$group_session,
+                      levels = c(1:2),
+                      labels = c("Extended course", "Standard course")
+                        )
+table1$BaselinePHQ9 <- as.integer(table1$BaselinePHQ9)
+table1$Anxiety <- factor(
+                    table1$Anxiety,
+                    levels = c(0,1),
+                    labels = c("No anxiety comorbidity", "Any anxiety comorbidity")
+)
+
+names(table1)[1] <- "Age (years)"
+names(table1)[2] <- "Sex"
+names(table1)[3] <- "Baseline depressive symptoms"
+names(table1)[4] <- "Anxiety comorbidity"
+names(table1)[6:12] <- c("SSRI/SNRI use",
+                         "TCA use",
+                         "Other antidepressant use",
+                         "Benzodiazepine use",
+                         "Augmenting agent use",
+                         "Anticonvulsant use",
+                         "Lithium use"
+                         )
+
+group_summary <- table1 %>% 
+  tbl_summary(by = "group_session",
+            statistic = list(all_continuous() ~ "{mean} ({sd})"),
+            digits = list(all_continuous() ~ c(2, 2), all_categorical() ~ c(0, 2))
+            ) %>% 
+  add_overall(col_label = "**Total sample**, N = {N}")
+
+group_summary
+```
+
+## To do multinomial logistic regression
 
 ```{r}
 library(nnet)
 library(tidyr)
 library(dplyr)
 
+# select data
 df <- df %>% 
   mutate(across(c(`meds_selected$AD_use`,
                   `meds_selected$benzo_use`,
@@ -310,9 +519,11 @@ df <- df %>%
                 ~ifelse(.x, 1, 0)
                 )) %>% 
   mutate(W2delta = Y - W2PHQ9,
-         W2relative_delta = (Y - W2PHQ9)/Y)
+         W2relative_delta = (Y - W2PHQ9)/Y) %>% 
+  mutate(W1delta = Y - W1PHQ9,
+         W1relative_delta = (Y - W1PHQ9)/Y)
 
-# defining a function to get p values
+# to build a function to extract p values
 pValue_extract <- function(x){
   z <- summary(x)$coefficients/summary(x)$standard.errors
   # 2-tailed Wald z tests to test significance of coefficients
@@ -326,30 +537,47 @@ df$BiologicalSexandGenderifDi <- as.factor(df$BiologicalSexandGenderifDi)
 df$Race <- as.factor(df$Race)
 df$ofMedsDuringTx <- as.factor(df$ofMedsDuringTx)
 
-# the initial model
+
 model <- multinom(X_traj_Group ~ AgeMTDay + BaselinePHQ9 + BiologicalSex  + Anxiety, data = df, weights = df$Group_Weights)
 
-OR_std <- exp(coef(model))*summary(model)$standard.errors
-CI_upper <- exp(coef(model)) + 1.96*OR_std
-CI_lower <- exp(coef(model)) - 1.96*OR_std
-pValue_extract(model)
-exp(coef(model))
-CI_lower
-CI_upper
+coef_estimates <- coef(model)
+std_errors <- sqrt(diag(vcov(model)))
+conf_interval <- 1.96
+lower_bound <- coef_estimates - (conf_interval * std_errors)
+upper_bound <- coef_estimates + (conf_interval * std_errors)
+odds_ratios <- exp(coef_estimates)
+ci_lower <- exp(lower_bound)
+ci_upper <- exp(upper_bound)
+odds_ratios
+ci_lower
+ci_upper
 
-# model including medication info
-model <- multinom(X_traj_Group ~ AgeMTDay + BaselinePHQ9 + BiologicalSex  + Anxiety + df$`meds_selected$anticonvulsant_use`, data = df, weights = df$Group_Weights)
+model <- multinom(X_traj_Group ~ AgeMTDay +BiologicalSex  + Anxiety + W1relative_delta, data = df, weights = df$Group_Weights)
 
-OR_std <- exp(coef(model))*summary(model)$standard.errors
-CI_upper <- exp(coef(model)) + 1.96*OR_std
-CI_lower <- exp(coef(model)) - 1.96*OR_std
-pValue_extract(model)
-exp(coef(model))
-CI_lower
-CI_upper
+coef_estimates <- coef(model)
+std_errors <- sqrt(diag(vcov(model)))
+conf_interval <- 1.96
+lower_bound <- coef_estimates - (conf_interval * std_errors)
+upper_bound <- coef_estimates + (conf_interval * std_errors)
+odds_ratios <- exp(coef_estimates)
+ci_lower <- exp(lower_bound)
+ci_upper <- exp(upper_bound)
+odds_ratios
+ci_lower
+ci_upper
+
+# # original version: flagged for problemtic way of calculating CIs of OR!
+# OR_std <- exp(coef(model))*summary(model)$standard.errors
+# CI_upper <- exp(coef(model)) + 1.96*OR_std
+# CI_lower <- exp(coef(model)) - 1.96*OR_std
+# pValue_extract(model)# p values
+# exp(coef(model))# OR
+# CI_lower# CI
+# CI_upper
+
 ```
 
-## Calculating the c-statistics and Hosmer-Lemeshow test results
+## calculate the c-statistics and Hosmer-Lemeshow test results
 
 ```{r}
 # install and library all packages

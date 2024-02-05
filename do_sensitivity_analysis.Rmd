@@ -1,0 +1,130 @@
+---
+title: "sensitivity_analyses"
+author: "Xiao Chen"
+date: "2024-01-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+```
+
+## To import data
+
+```{r}
+library("xlsx")
+
+
+# import data
+traj_data_full <- read.xlsx("Salience_S51TTR_ITT+Opt_BilateralDLPFC_Addl.xlsx", sheetIndex = 1)
+trajectory_data_clean <- read.csv("Trajectory_Data_Clean.csv")
+data_prev_trt <- read.xlsx("Salience_S51_PreviousTMS.xlsx", sheetIndex = 1)
+
+wk10_group <- read.csv("wk10_model_group.csv")
+names(wk10_group) <- c("wk10_model_group")
+wk7_group <- read.csv("wk7_model_group.csv")
+names(wk7_group) <- c("wk7_model_group")
+```
+
+To compare the clinical characteristics between "Salience 51" group and the "opted for Additional Txs" group
+
+```{r}
+# Comparing the age, sex ratio, and the baseline depressive symptoms
+# ages
+age_sal <- trajectory_data_clean$AgeMTDay
+df_age_sal <- data.frame(age = age_sal, group = rep(1, length(age_sal)))
+
+age_opt <- traj_data_full$AgeMTDay[traj_data_full$Enrolled.in.Study == "Opted for Additional Txs"]
+df_age_opt <- data.frame(age = age_opt, group = rep(2, length(age_opt)))
+
+df_age = rbind(df_age_sal, df_age_opt)
+result <- t.test(age ~ group, data = df_age, var.equal = TRUE)
+print(result)
+
+# baseline depressive symptoms
+dep_sal <- trajectory_data_clean$BaselinePHQ9
+df_dep_sal <- data.frame(dep = dep_sal, group = rep(1, length(dep_sal)))
+
+dep_opt <- traj_data_full$BaselinePHQ9[traj_data_full$Enrolled.in.Study == "Opted for Additional Txs"]
+df_dep_opt <- data.frame(dep = dep_opt, group = rep(2, length(dep_opt)))
+
+df_dep = rbind(df_dep_sal, df_dep_opt)
+result <- t.test(dep ~ group, data = df_dep, var.equal = TRUE)
+print(result)
+
+```
+
+## To get the info regarding the treatment lengths
+
+```{r}
+FinalTxDate <- as.Date(trajectory_data_clean$FinalTxDate, format = "%d%b%Y")
+StartTxDate <- as.Date(trajectory_data_clean$MTStartDate, format = "%d%b%Y")
+Txlength <- FinalTxDate - StartTxDate
+Txlength <- as.numeric(Txlength) / 7
+
+trajectory_data_clean <- cbind(trajectory_data_clean, Txlength)
+trajectory_data_clean <- cbind(trajectory_data_clean, wk10_group)
+
+Txlength_total <- trajectory_data_clean %>%
+  summarize(
+      mean = mean(Txlength, na.rm = TRUE),
+      min = min(Txlength, na.rm = TRUE),
+      max = max(Txlength, na.rm = TRUE),
+      std = sd(Txlength, na.rm = TRUE)
+  )
+
+Txlength_group <- trajectory_data_clean %>%
+  group_by(wk10_model_group) %>%
+  summarize(
+      mean = mean(Txlength, na.rm = TRUE),
+      min = min(Txlength, na.rm = TRUE),
+      max = max(Txlength, na.rm = TRUE),
+      std = sd(Txlength, na.rm = TRUE)
+  )
+```
+
+## To get the mean and range of session numbers for earch group
+
+```{r}
+library(tidyverse)
+library(dplyr)
+
+
+session_num_group <- trajectory_data_clean %>%
+  group_by(wk10_model_group) %>%
+  summarize(
+    mean = mean(ofCompletedTreatments, na.rm = TRUE),  # Calculate mean
+    max = max(ofCompletedTreatments, na.rm = TRUE),
+    min = min(ofCompletedTreatments, na.rm = TRUE),  # Calculate range
+    sd = sd(ofCompletedTreatments, na.rm = TRUE)
+  )
+
+session_num_total <- trajectory_data_clean %>%
+  summarize(
+      mean_session_num = mean(ofCompletedTreatments, na.rm = TRUE),
+      min_session_num = min(ofCompletedTreatments, na.rm = TRUE),
+      max_session_num = max(ofCompletedTreatments, na.rm = TRUE),
+      std_session_num = sd(ofCompletedTreatments, na.rm = TRUE)
+  )
+```
+
+## To get the info on previous treatments
+
+```{r}
+data_prev_trt_filtered <- data_prev_trt %>% filter(Research.ID... %in% trajectory_data_clean$RID)
+
+num_first_session <- data_prev_trt_filtered %>% filter(End.Date.Prev..Rd == "N/A-1st") %>% summarise(count = n())
+
+data_prev_trt_filtered2 <- data_prev_trt_filtered %>% filter(End.Date.Prev..Rd != "N/A-1st")
+data_prev_trt_filtered2$Days.Between.Prev..Rd...Current <- as.numeric(data_prev_trt_filtered2$Days.Between.Prev..Rd...Current)
+result <- data_prev_trt_filtered2 %>%
+  mutate(prev_ses_num = Tx.Rd.. - 1) %>%
+  summarise(
+#    mean_value = mean(prev_ses_num, na.rm = TRUE),
+#    sd_value = sd(prev_ses_num, na.rm = TRUE),
+    mean_value = mean(Days.Between.Prev..Rd...Current, na.rm = TRUE),
+    sd_value = sd(Days.Between.Prev..Rd...Current, na.rm = TRUE)
+  )
+
+```
